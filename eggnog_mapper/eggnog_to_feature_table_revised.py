@@ -5,8 +5,6 @@ __copyright__ = "Copyright 2022"
 __maintainer__ = "Sean P. Jungbluth"
 __email__ = "sjungbluth@lbl.com"
 
-import cProfile
-from pstats import Stats, SortKey
 import os
 import sys
 import pandas
@@ -14,10 +12,11 @@ import argparse
 import time
 from argparse import RawTextHelpFormatter
 from collections import Counter, defaultdict
-from Bio import SeqIO
-from typing import List
 from go_xref import GO_Xrefs
-from util import unique_list
+from util import (
+    unique_list,
+    isfloat
+)
 from contigs import (
     summarize_contig_lengths,
     filter_contig_lengths
@@ -65,10 +64,10 @@ from contigs import (
 
 
 # import annotation and contig fasta file and, if existing, coverage data
-def import_data(input_annotation: str, use_coverage: str, input_coverage: str, contig_filter: str, min_contig_coverage: int, all_contigs_list: list):
+def import_data(input_annotation: str, use_coverage: bool, input_coverage: str, contig_filter: str, min_contig_coverage: int, all_contigs_list: list):
     """
     :param input_annotation: annotation file path
-    :param use_coverage: "Yes" or "No"
+    :param use_coverage: boolean
     :param input_coverage: coverage file path,
     :param contig_filter: str or "NULL" contig filter file path
     :param min_contig_coverage: int minimum contig coverage to use - other contigs are discarded
@@ -87,7 +86,7 @@ def import_data(input_annotation: str, use_coverage: str, input_coverage: str, c
             contig_filter_list = z.read().splitlines()
     else:
         contig_filter_list = []
-    if use_coverage == "Yes": # if coverage being used then load file
+    if use_coverage: # if coverage being used then load file
         input_coverage_fp = os.path.abspath(input_coverage)
         coverages = {}
         contig_cover_filter = []
@@ -108,46 +107,20 @@ def import_data(input_annotation: str, use_coverage: str, input_coverage: str, c
     contig_filter_nonhit_list.sort()
     return annotation_data, coverages, contig_filter_nonhit_list, all_contigs_list
 
-
-def read_xref_table(path: str) -> dict:
-    xref_table = defaultdict(list)
-    with open(path) as f:
-        lines = f.readlines()
-        for line in lines:
-            row = line.strip().split('\t')
-            # 3 here - XRef_Annotation and GO_desc
-            xref_table[row[2]].append(row[0])
-    return xref_table
-
-# import all GO cross-reference tables
-def import_go_xref_tables(input_cat, go_directory="."):
-    go_xref_table_list = {}
-    simple_xref_table_list = {}
-    files = ["ec2go", "hamap2go", "interpro2go", "kegg_reaction2go", "metacyc2go", "pfam2go", "pirsf2go", "prosite2go",
-             "reactome2go", "rfam2go", "rhea2go", "smart2go", "um-bbd_enzymeid2go", "um-bbd_pathwayid2go", "um-bbd_reactionid2go",
-             "uniprotkb_kw2go", "uniprotkb_sl2go", "unirule2go"]
-
-    if input_cat == "GO":
-        for file in files:
-            filepath = os.path.join(os.path.dirname(__file__), f"../GO_xref/{file}.clean")
-            simple_xref_table_list[f"{file}_data"] = read_xref_table(filepath)
-    return go_xref_table_list, simple_xref_table_list
-
-
 # declare and prep variables
-def variable_prep(use_coverage, binary_output):
+def variable_prep(use_coverage: bool, binary_output: str):
     summary_table = []
     taxonomic_scope = []
     summary_table_final_count = {}
     df_export = pandas.DataFrame()
     contig_running_count = 0
     running_contig_non_hits = 0
-    if use_coverage == "Yes":
+    if use_coverage:
         cov_method = "weighted"
     else:
         cov_method = "unweighted"
     if binary_output == "Yes":
-        use_coverage = "No"
+        use_coverage = False
     return summary_table, taxonomic_scope, summary_table_final_count, df_export, contig_running_count, running_contig_non_hits, cov_method
 
 # needed to detect transition to a new contig so that summary step executes to combine with coverage data on a per-contig basis
@@ -168,13 +141,6 @@ def _combine_and_add_dictionaries(dict_a, dict_b):
     dict_combined = dictcountA + dictcountB
     return dict_combined
 
-def _isfloat(num):
-    try:
-        float(num)
-        return True
-    except ValueError:
-        return False
-
 def _determine_consensus_taxonomy(taxonomic_scope, taxonomy_consensus_threshold, contig_running_count):
     taxonomic_scope_output = dict(Counter(taxonomic_scope))
     consensus_taxonomy = "NA"
@@ -185,7 +151,7 @@ def _determine_consensus_taxonomy(taxonomic_scope, taxonomy_consensus_threshold,
             break
         consensus_taxonomy = "NA"
         hit_frequency = "NA"
-    if _isfloat(hit_frequency): # rarely, but can happen that there is no consensus taxonomy, so need to confirm
+    if isfloat(hit_frequency): # rarely, but can happen that there is no consensus taxonomy, so need to confirm
         hit_frequency = round(hit_frequency,2)
     return consensus_taxonomy, hit_frequency
 
@@ -346,9 +312,9 @@ def scan_and_summarize_output(input_annotation, input_cat, cov_method, annotatio
 
 def run_mapper(args):
     starttime = time.time()
-    if args.binary_output == "Yes" and args.use_coverage == "Yes":
+    if args.binary_output == "Yes" and args.use_coverage:
         print("Binary output selected, adjusted coverage setting to maximize program performance")
-        args.use_coverage = "No"
+        args.use_coverage = False
     if (not args.input_cat == "ALL_CATEGORIES") and (not args.input_cat == "GO") and (not args.input_cat == "EC") and (not args.input_cat == "KEGG_ko") and (not args.input_cat == "COG") and (not args.input_cat == "KEGG_Module") and (not args.input_cat == "KEGG_Reaction") and (not args.input_cat == "KEGG_rclass") and (not args.input_cat == "BRITE") and (not args.input_cat == "KEGG_TC") and (not args.input_cat == "CAZy") and (not args.input_cat == "BiGG_Reaction") and (not args.input_cat == "eggNOG_OGs"):
         sys.exit("Bad category selection, please review options. Exiting...")
     input_fasta = args.input_contig_fasta
@@ -401,13 +367,12 @@ def run_mapper(args):
 
     # run main function to summarize eggnog mapper annotation output on a per contig basis
     if args.input_cat == "ALL_CATEGORIES":
-        cat_options = ["GO", "EC", "KEGG_ko", "COG", "KEGG_Module", "KEGG_Reaction", "KEGG_rclass", "BRITE", "KEGG_TC", "CAZy", "BiGG_Reaction", "eggNOG_OGs"]
+        cat_options = input_category_options
     else:
-        cat_options = []
-        cat_options.append(args.input_cat)
+        cat_options = [args.input_cat]
     for x in range(0,len(cat_options)):
         args.input_cat = cat_options[x]
-        print("Generating {} table(s) from eggNOG-mapper data".format(args.input_cat))
+        print(f"Generating {args.input_cat} table(s) from eggNOG-mapper data")
         # import Gene Ontology cross-reference tables
         if args.input_cat == "GO" and args.make_go_xref != "No":
             go_xref_table_list = go_xrefs.xrefs
@@ -415,6 +380,7 @@ def run_mapper(args):
             go_xref_table_list = ""
         # prep starting variables
         summary_table, taxonomic_scope, summary_table_final_count, df_export, contig_running_count, running_contig_non_hits, cov_method = variable_prep(args.use_coverage, args.binary_output)
+
         scan_and_summarize_output(
             args.input_annotation,
             args.input_cat,
@@ -473,7 +439,7 @@ def _get_args():
     parser.add_argument("--min_contig_coverage", dest="min_contig_coverage", default=5, help="Indicate the minimum average contig coverage required to include in final count table (default: 5).")
     parser.add_argument("--contig_filter", dest="contig_filter", default="NULL", help="Indicate the contigs to retain for the output (i.e. contigs not listed will be filtered before count tables produced).")
     parser.add_argument("--eggnog_category", dest="input_cat", default="GO", help="Indicate the eggnog mapper annotation ontology to use for mapping. (options: ALL_CATEGORIES, GO, EC, KEGG_ko, COG, KEGG_Module, KEGG_Reaction, KEGG_rclass, BRITE, KEGG_TC, CAZy, BiGG_Reaction, eggNOG_OGs (default: GO))")
-    parser.add_argument("--use_cov", dest="use_coverage", default="Yes", help="Indicate if contig coverage information should be used to produce a weighted output count table. (default: Yes)")
+    parser.add_argument("--use_cov", dest="use_coverage", default=False, action="store_true", help="Indicate if contig coverage information should be used to produce a weighted output count table. (default: False)")
     parser.add_argument("--binary", dest="binary_output", default="No", help="Indicate if the output should just indicate hit presence/absence. (default: No)")
     parser.add_argument("--contig_taxa_threshold", dest="taxonomy_consensus_threshold", default=0.5, help="Indicate the frequency threshold for determining contig consensus taxonomy. (default: 0.5)")
     parser.add_argument("--go_xref", dest="make_go_xref", default="Yes", help="Indicate if input_cut is GO then generate cross-reference tables. (default: Yes)")
