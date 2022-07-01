@@ -236,7 +236,8 @@ def scan_and_summarize_output(
     taxonomy_consensus_threshold,
     min_contig_length,
     min_contig_coverage,
-    go_xrefs_simple):
+    go_xrefs_simple
+):
 
     # prep starting variables
     summary_table = []
