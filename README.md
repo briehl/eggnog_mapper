@@ -36,6 +36,24 @@ eggnog_mapper/eggnog_to_feature_table.py \
 * `--use_cov` - is present, use the contig coverage to create weighted output files. These weights are a multiplication of the number of appearances of an annotation by the contig coverage
 * `--binary` - if "Yes", make a binary representation of the annotation counts - just 1 or 0 if that annotation is present
 * `--go_xref` - if "Yes", create cross-reference tables from the Gene Ontology values in the annotation to various other annotations (see below for a list)
+  * EC
+  * HAMAP
+  * InterPro
+  * KEGG
+  * MetaCyc
+  * Pfam
+  * PIRSF
+  * PROSITE
+  * Reactome
+  * RFam
+  * Rhea
+  * SMART
+  * UM-BBD EnzymeId
+  * UM-BBD PathwayId
+  * UM-BBD ReactionId
+  * UniProt KeyWord
+  * UniProt Subcellular Location
+  * UniRule
 * `--min_contig_length` - int, default 2000 - minimum contig length used for generating outputs
 * `--min_contig_coverage` - int, default 5 - minimum contig coverage used for generating outputs
 * `--eggnog_category` - string, default "GO" - the eggNOG mapper ontology to use for mapping to the output files. Allowed options are:
@@ -53,7 +71,8 @@ eggnog_mapper/eggnog_to_feature_table.py \
   * BiGG_Reaction
   * eggNOG_OGs
 * `--contig_taxa_threshold` - float, default 0.5 - the frequency threshold for determining contig consensus taxonomy
-* 
+
+
 ## Input files
 ### Annotation File
 This is expected to be a TSV with the following columns, in order. Note that not all of these are expected to be present.
