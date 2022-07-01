@@ -14,7 +14,6 @@ from argparse import RawTextHelpFormatter
 from collections import Counter, defaultdict
 from go_xref import GO_Xrefs
 from util import (
-    unique_list,
     isfloat
 )
 from contigs import (
@@ -64,64 +63,52 @@ from contigs import (
 
 
 # import annotation and contig fasta file and, if existing, coverage data
-def import_data(input_annotation: str, use_coverage: bool, input_coverage: str, contig_filter: str, min_contig_coverage: int, all_contigs_list: list):
+def import_data(
+    input_annotation_file: str,
+    use_coverage: bool,
+    input_coverage_file: str,
+    contig_filter_file: str,
+    min_contig_coverage: int,
+    verbose: bool
+):
     """
-    :param input_annotation: annotation file path
+    :param input_annotation_file: annotation file path
     :param use_coverage: boolean
-    :param input_coverage: coverage file path,
+    :param input_coverage_file: coverage file path,
     :param contig_filter: str or "NULL" contig filter file path
     :param min_contig_coverage: int minimum contig coverage to use - other contigs are discarded
     :returns:
     annotation_data - dataframe with annotation data
     coverages - dataframe of contig coverage counts
-    contig_filter_nonhit_list -
+    contig_filter - set of contigs to be removed, either by being in the contig_filter file or
     """
-    min_contig_coverage = int(min_contig_coverage)
     # import annotation data
-    input_annotation_fp = os.path.abspath(input_annotation)
-    annotation_data = pandas.read_csv(input_annotation_fp, delimiter='\t', header=None, names=["query_name", "seed_eggNOG_ortholog", "seed_ortholog_evalue", "seed_ortholog_score", "best_tax_level", "Preferred_name", "GO", "EC", "KEGG_ko", "KEGG_Pathway", "KEGG_Module", "KEGG_Reaction", "KEGG_rclass", "BRITE", "KEGG_TC", "CAZy", "BiGG_Reaction", "taxonomic_scope", "eggNOG_OGs", "best_eggNOG_OG", "COG", "eggNOG_free_text_desc"])
-    if contig_filter != "NULL":
-        contig_filter_fp = os.path.abspath(contig_filter)
-        with open(contig_filter_fp) as z:
-            contig_filter_list = z.read().splitlines()
-    else:
-        contig_filter_list = []
-    if use_coverage: # if coverage being used then load file
-        input_coverage_fp = os.path.abspath(input_coverage)
-        coverages = {}
-        contig_cover_filter = []
-        with open(input_coverage_fp, "r") as cov_file:
+    input_annotation_path = os.path.abspath(input_annotation_file)
+    annotation_data = pandas.read_csv(input_annotation_path, delimiter='\t', header=None, names=["query_name", "seed_eggNOG_ortholog", "seed_ortholog_evalue", "seed_ortholog_score", "best_tax_level", "Preferred_name", "GO", "EC", "KEGG_ko", "KEGG_Pathway", "KEGG_Module", "KEGG_Reaction", "KEGG_rclass", "BRITE", "KEGG_TC", "CAZy", "BiGG_Reaction", "taxonomic_scope", "eggNOG_OGs", "best_eggNOG_OG", "COG", "eggNOG_free_text_desc"])
+    contig_filter = set()     # contigs not to be used
+    if contig_filter_file != "NULL":
+        contig_filter_path = os.path.abspath(contig_filter_file)
+        with open(contig_filter_path) as z:
+            contig_filter = set(z.read().splitlines())
+        if verbose:
+            print("ignoring contigs from contig filter file")
+            print(f"{len(contig_filter)} contigs ignored")
+    coverages = {}
+    if use_coverage or min_contig_coverage > 0:  # if coverage being used then load file
+        input_coverage_file = os.path.abspath(input_coverage_file)
+        with open(input_coverage_file, "r") as cov_file:
             cov_lines = cov_file.readlines()
             for line in cov_lines:
                 row = line.strip().split('\t')
                 # just contig_name and coverage_value here
                 coverage = int(row[1])
-                coverages[row[0]] = coverage
-                if coverage >= min_contig_coverage:
-                    contig_cover_filter.append(row[0])
-        contig_filter_list = contig_filter_list + contig_cover_filter
-    else:
-        coverages = ""
-    contig_filter_list = unique_list(contig_filter_list)
-    contig_filter_nonhit_list = list(set(all_contigs_list) - set(contig_filter_list))
-    contig_filter_nonhit_list.sort()
-    return annotation_data, coverages, contig_filter_nonhit_list, all_contigs_list
-
-# declare and prep variables
-def variable_prep(use_coverage: bool, binary_output: str):
-    summary_table = []
-    taxonomic_scope = []
-    summary_table_final_count = {}
-    df_export = pandas.DataFrame()
-    contig_running_count = 0
-    running_contig_non_hits = 0
-    if use_coverage:
-        cov_method = "weighted"
-    else:
-        cov_method = "unweighted"
-    if binary_output == "Yes":
-        use_coverage = False
-    return summary_table, taxonomic_scope, summary_table_final_count, df_export, contig_running_count, running_contig_non_hits, cov_method
+                contig_id = row[0]
+                coverages[contig_id] = coverage
+                if coverage < min_contig_coverage:
+                    if verbose:
+                        print(f"filtering contig {contig_id} with coverage {coverage}")
+                    contig_filter.add(contig_id)
+    return annotation_data, coverages, contig_filter
 
 # needed to detect transition to a new contig so that summary step executes to combine with coverage data on a per-contig basis
 def _contig_summary_trigger(annotation_data, i):
@@ -170,6 +157,7 @@ def _summarize_contig_module(f, summary_table, running_contig_non_hits, contig_r
     taxonomic_scope
     taxonomy_consensus_threshold
     """
+    print("calling _summarize_contig_module")
     summary_table_output = dict(Counter(summary_table))  # covert list to dictionary with feature counts
     feature_hit_freq = 1 - (running_contig_non_hits / contig_running_count)  # calculate frequency of genes with features on a contig
     contig_length = "NA"
@@ -178,28 +166,12 @@ def _summarize_contig_module(f, summary_table, running_contig_non_hits, contig_r
     # speed optimization using numpy
     if contig_id in contig_length_data:
         contig_length = contig_length_data[contig_id]
-    # contig_length_data_numpy, contig_length_column_index_dictionary = _convert_pandas_to_numpy(contig_length_data)
-    # for j in range(0, len(contig_length_data_numpy)):
-    #     if contig_length_data_numpy[j, contig_length_column_index_dictionary['contig_name']] == contig_id:
-    #         contig_length = contig_length_data_numpy[j, contig_length_column_index_dictionary['length']]
-    #         break
     if cov_method == "weighted":
         # multiply dictionary values by coverage for that contig
         if contig_id not in coverages:
             pass
-        # if coverages.loc[coverages["contig_name"] == contig_id]["coverage_value"].empty: # check to make sure contig has coverage information
-            # pass
-            #print("Warning -- contig: {} missing coverage information, will include in count but can't apply coverage weighting.".format(contig_id))
-            #f.write("{}\t{}\tNA\t{}\t{}\t{}\n".format(contig_id, contig_length, round(feature_hit_freq,2), consensus_taxonomy, consensus_taxonomy_frequency))
         else:
             contig_coverage = coverages[contig_id]
-            # coverages_data_numpy, coverages_column_index_dictionary = _convert_pandas_to_numpy(coverages)
-            # for j in range(0, len(coverages_data_numpy)):
-            #     if coverages_data_numpy[j, coverages_column_index_dictionary['contig_name']] == contig_id:
-            #         contig_coverage = coverages_data_numpy[j, coverages_column_index_dictionary['coverage_value']]
-            #         break
-                    # older, slower version with pandas locate
-            #contig_coverage = int(coverages.loc[coverages["contig_name"] == contig_id]["coverage_value"])  # extract contig coverage value, making sure no mismatches by simple iteration
             summary_table_output.update((x, y*contig_coverage) for x, y in summary_table_output.items())  # multiply dictionary values by contig coverage
             # need to add summary_table_output dict to new summary_table_final_count dict
             summary_table_final_count = _combine_and_add_dictionaries(summary_table_output, summary_table_final_count)
@@ -229,7 +201,7 @@ def _munge_prepare_and_export_count_tables(summary_table_final_count, input_anno
         # df_export = df_export.sort_values(0, ascending=False) # sort_output
         pandas.DataFrame(df_export).to_csv(f"{os.getcwd()}/{input_annotation.split('/')[-1].split('_')[0]}_len{min_contig_length}_cov{min_contig_coverage}_{input_cat}_{cov_method}_direct_count_table.csv", index=True, header=False)
 
-def _convert_go_count_table_to_other_annotation_simple(summary_table_final_count, input_annotation, input_cat, cov_method, go_xref_tables, binary_output, min_contig_length, min_contig_coverage):
+def _convert_go_count_table_to_other_annotation(summary_table_final_count, input_annotation, input_cat, cov_method, go_xref_tables, binary_output, min_contig_length, min_contig_coverage):
     print("\nGO count table production complete - converting GO to other name spaces using translation tables.")
     use_binary = binary_output == "Yes"
     for go_xref in go_xref_tables.keys():
@@ -250,34 +222,35 @@ def _convert_go_count_table_to_other_annotation_simple(summary_table_final_count
         df_export = pandas.DataFrame.from_dict(xref_summary_table_final_count_dict, orient='index')
         pandas.DataFrame(df_export).to_csv(outfile_path, index=True, header=False)
 
-def scan_and_summarize_output(input_annotation, input_cat, cov_method, annotation_data, coverages, contig_filter_list, contig_running_count, running_contig_non_hits, summary_table, summary_table_final_count, df_export, make_go_xref, go_xref_table_list, binary_output, contig_length_data, taxonomic_scope, taxonomy_consensus_threshold, min_contig_length, min_contig_coverage, go_xrefs_simple):
-    """
-    input_annotation
-    input_cat
-    cov_method
-    annotation_data
-    coverages
-    contig_filter_list
-    contig_running_count
-    running_contig_non_hits
-    summary_table
-    summary_table_final_count
-    df_export
-    make_go_xref
-    go_xref_table_list
-    binary_output
-    :param contig_length_data: dict - keys = contig_ids, values = ints
-    taxonomic_scope
-    taxonomy_consensus_threshold
-    min_contig_length
-    min_contig_coverage
-    go_xrefs_simple
-    """
+def scan_and_summarize_output(
+    output_file_prefix,  # like "<mg_id>_len2000_cov5_GO_weighted"
+    input_annotation,    # input annotation file name
+    input_cat,           # input category - string
+    cov_method,          # one of "weighted", "unweighted"
+    annotation_data,     #
+    coverages,
+    contigs_allowed,     # set of used contigs
+    make_go_xref,
+    binary_output,
+    contig_length_data,
+    taxonomy_consensus_threshold,
+    min_contig_length,
+    min_contig_coverage,
+    go_xrefs_simple):
+
+    # prep starting variables
+    summary_table = []
+    taxonomic_scope = []
+    summary_table_final_count = {}
+    contig_running_count = 0
+    running_contig_non_hits = 0
+
     cols = ["contig_id", "contig_length", "feature_hit_freq", "consensus_taxonomy", "consensus_taxonomy_frequency"]
     if cov_method == "weighted":
         cols.insert(2, "avg_contig_coverage")
 
-    with open(f"{os.getcwd()}/{input_annotation.split('/')[-1].split('_')[0]}_len{min_contig_length}_cov{min_contig_coverage}_{input_cat}_{cov_method}_summary.tsv", 'w') as f:
+    summary_file = f"{output_file_prefix}_summary.tsv"
+    with open(summary_file, 'w') as f:
         f.write("\t".join(cols) + "\n")
         total_annotation_queries = len(annotation_data["query_name"])
         for i in range(total_annotation_queries):  # for each row in table
@@ -298,17 +271,20 @@ def scan_and_summarize_output(input_annotation, input_cat, cov_method, annotatio
                         summary_table.append(anno)
             taxonomic_scope.append(annotation_data["taxonomic_scope"][i])
             if summarize_contig:  # if end of contig reached, count features and multiple by coverage value, add to final summary dict
-                if contig_id in contig_filter_list:
-                    summary_table_final_count, summary_table, contig_running_count, running_contig_non_hits, taxonomic_scope = _summarize_contig_module(f, summary_table, running_contig_non_hits, contig_running_count, cov_method, coverages, contig_id, summary_table_final_count, contig_length_data, taxonomic_scope, taxonomy_consensus_threshold)
+                if contig_id in contigs_allowed:
+                    (summary_table_final_count,
+                    summary_table,
+                    contig_running_count,
+                    running_contig_non_hits,
+                    taxonomic_scope) = _summarize_contig_module(f, summary_table, running_contig_non_hits, contig_running_count, cov_method, coverages, contig_id, summary_table_final_count, contig_length_data, taxonomic_scope, taxonomy_consensus_threshold)
                 else: # skip contig and reset relevant variables
                     taxonomic_scope = []
                     summary_table = []
                     contig_running_count = 0
-                    contig_running_count = 0
                     running_contig_non_hits = 0
         _munge_prepare_and_export_count_tables(summary_table_final_count, input_annotation, input_cat, cov_method, binary_output, min_contig_length, min_contig_coverage)
         if make_go_xref == "Yes" and input_cat == "GO":
-            _convert_go_count_table_to_other_annotation_simple(summary_table_final_count, input_annotation, input_cat, cov_method, go_xrefs_simple, binary_output, min_contig_length, min_contig_coverage)
+            _convert_go_count_table_to_other_annotation(summary_table_final_count, input_annotation, input_cat, cov_method, go_xrefs_simple, binary_output, min_contig_length, min_contig_coverage)
 
 def run_mapper(args):
     starttime = time.time()
@@ -345,59 +321,55 @@ def run_mapper(args):
     fasta_summary_file = os.path.join(f"{output_dir}", f"{input_fasta_prefix}_contig_length_summary.tsv")
 
     contig_lengths = summarize_contig_lengths(input_fasta, fasta_summary_file)
-    contig_length_filter_list = filter_contig_lengths(contig_lengths, args.min_contig_length)
+    contig_length_filter = filter_contig_lengths(contig_lengths, args.min_contig_length)
 
+    all_contigs = contig_lengths.keys()
     # import annotation and coverage data, filter by coverage and input contig list
-    annotation_data, coverages, contig_filter_nonhit_list, all_contigs_list = import_data(
-        args.input_annotation,
-        args.use_coverage,
-        args.input_coverage,
-        args.contig_filter,
-        args.min_contig_coverage,
-        contig_lengths.keys()
+    annotation_data, coverages, contig_import_filter = import_data(
+        args.input_annotation,      # input annotation file
+        args.use_coverage,          # boolean whether to weight by coverage
+        args.input_coverage,        # input coverage file
+        args.contig_filter,         # optional list of contigs to include
+        args.min_contig_coverage,   # minimum contig coverage required
+        args.verbose
     )
 
-    contig_filter_list = list(set(all_contigs_list) - set(contig_length_filter_list) - set(contig_filter_nonhit_list))
+    contigs_allowed = set(all_contigs) - contig_length_filter - contig_import_filter
 
     input_category_options = [
         "GO", "EC", "KEGG_ko", "COG", "KEGG_Module", "KEGG_Reaction", "KEGG_rclass", "BRITE", "KEGG_TC", "CAZy", "BiGG_Reaction", "eggNOG_OGs"
     ]
 
     go_xrefs = GO_Xrefs()
+    cov_method = "weighted" if args.use_coverage else "unweighted"
 
     # run main function to summarize eggnog mapper annotation output on a per contig basis
     if args.input_cat == "ALL_CATEGORIES":
         cat_options = input_category_options
     else:
         cat_options = [args.input_cat]
-    for x in range(0,len(cat_options)):
-        args.input_cat = cat_options[x]
+    for cat in cat_options:
+        args.input_cat = cat
         print(f"Generating {args.input_cat} table(s) from eggNOG-mapper data")
         # import Gene Ontology cross-reference tables
         if args.input_cat == "GO" and args.make_go_xref != "No":
             go_xref_table_list = go_xrefs.xrefs
         else:
             go_xref_table_list = ""
-        # prep starting variables
-        summary_table, taxonomic_scope, summary_table_final_count, df_export, contig_running_count, running_contig_non_hits, cov_method = variable_prep(args.use_coverage, args.binary_output)
+
+        output_file_prefix = f"{os.getcwd()}/{args.input_annotation.split('/')[-1].split('_')[0]}_len{args.min_contig_length}_cov{args.min_contig_coverage}_{args.input_cat}_{cov_method}"
 
         scan_and_summarize_output(
+            output_file_prefix,
             args.input_annotation,
             args.input_cat,
             cov_method,
             annotation_data,
             coverages,
-            contig_filter_list,
-            contig_running_count,
-            running_contig_non_hits,
-            summary_table,
-            summary_table_final_count,
-            df_export,
+            contigs_allowed,
             args.make_go_xref,
-            go_xref_table_list,
             args.binary_output,
             contig_lengths,
-            taxonomic_scope,
             args.taxonomy_consensus_threshold,
             args.min_contig_length,
             args.min_contig_coverage,
@@ -442,10 +414,16 @@ def _get_args():
     parser.add_argument("--use_cov", dest="use_coverage", default=False, action="store_true", help="Indicate if contig coverage information should be used to produce a weighted output count table. (default: False)")
     parser.add_argument("--binary", dest="binary_output", default="No", help="Indicate if the output should just indicate hit presence/absence. (default: No)")
     parser.add_argument("--contig_taxa_threshold", dest="taxonomy_consensus_threshold", default=0.5, help="Indicate the frequency threshold for determining contig consensus taxonomy. (default: 0.5)")
-    parser.add_argument("--go_xref", dest="make_go_xref", default="Yes", help="Indicate if input_cut is GO then generate cross-reference tables. (default: Yes)")
+    parser.add_argument("--go_xref", dest="make_go_xref", default="Yes", help="Indicate if input_cat is GO then generate cross-reference tables. (default: Yes)")
     parser.add_argument("--go_xref_loc", dest="go_xref_loc", default=".", help="Path to a directory containing GO cross-reference tables")
     parser.add_argument("--version", action="version", version='%(prog)s v2.0')
+    parser.add_argument("--verbose", dest="verbose", default=False, action="store_true", help="Extra verbose output")
     args = parser.parse_args()
+
+    # make args a little more sensible
+    if args.binary_output == "Yes":
+        args.use_coverage = False
+
     if len(sys.argv) is None or len(sys.argv) < 2:
         parser.print_help()
         sys.exit(0)
