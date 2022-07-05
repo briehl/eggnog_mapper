@@ -59,6 +59,6 @@ class GO_Xrefs:
 
         for file in XREF_TYPES:
             filepath = os.path.join(os.path.dirname(__file__), go_directory, f"{file}.clean")
-            xrefs[f"{file}_data"] = self._read_xref_table(filepath)
+            xrefs[file] = self._read_xref_table(filepath)
         return xrefs
 

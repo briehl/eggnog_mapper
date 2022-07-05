@@ -215,7 +215,7 @@ def _convert_go_count_table_to_other_annotation(summary_table_final_count, input
             for x_ref in x_refs:
                 xref_summary_table_final_count_dict[x_ref] += summary_table_final_count[go_term]
 
-        outfile_path = f"{os.getcwd()}/{input_annotation.split('/')[-1].split('_')[0]}_len{min_contig_length}_cov{min_contig_coverage}_{input_cat}_{'binary' if use_binary else cov_method}_{go_xref.split('_data')[0]}_count_table.csv"
+        outfile_path = f"{os.getcwd()}/{input_annotation.split('/')[-1].split('_')[0]}_len{min_contig_length}_cov{min_contig_coverage}_{input_cat}_{'binary' if use_binary else cov_method}_{go_xref}_count_table.csv"
         if use_binary:
             for x in xref_summary_table_final_count_dict:
                 xref_summary_table_final_count_dict[x] = 1
@@ -236,7 +236,7 @@ def scan_and_summarize_output(
     taxonomy_consensus_threshold,
     min_contig_length,
     min_contig_coverage,
-    go_xrefs_simple
+    go_xrefs
 ):
 
     # prep starting variables
@@ -285,7 +285,7 @@ def scan_and_summarize_output(
                     running_contig_non_hits = 0
         _munge_prepare_and_export_count_tables(summary_table_final_count, input_annotation, input_cat, cov_method, binary_output, min_contig_length, min_contig_coverage)
         if make_go_xref == "Yes" and input_cat == "GO":
-            _convert_go_count_table_to_other_annotation(summary_table_final_count, input_annotation, input_cat, cov_method, go_xrefs_simple, binary_output, min_contig_length, min_contig_coverage)
+            _convert_go_count_table_to_other_annotation(summary_table_final_count, input_annotation, input_cat, cov_method, go_xrefs, binary_output, min_contig_length, min_contig_coverage)
 
 def run_mapper(args):
     starttime = time.time()
