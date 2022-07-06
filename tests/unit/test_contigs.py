@@ -1,4 +1,4 @@
-from eggnog_mapper.contigs import (
+from eggnog_to_feature_table.contigs import (
     summarize_contig_lengths,
     filter_contig_lengths
 )

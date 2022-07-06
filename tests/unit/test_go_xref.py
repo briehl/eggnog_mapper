@@ -1,5 +1,5 @@
 import re
-from eggnog_mapper.go_xref import (
+from eggnog_to_feature_table.go_xref import (
     GO_Xrefs,
     XREF_TYPES
 )

@@ -1,4 +1,4 @@
-from eggnog_mapper.util import isfloat
+from eggnog_to_feature_table.util import isfloat
 
 def test_isfloat_false():
     for test_case in ["foo", "", "NaN", list(), dict(), None]:
