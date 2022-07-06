@@ -195,13 +195,8 @@ def _munge_prepare_and_export_count_tables(summary_table_final_count, input_anno
         for x in summary_table_final_count_dict:
             summary_table_final_count_dict[x] = 1
             dict_to_csv(summary_table_final_count_dict, f"{os.getcwd()}/{input_annotation.split('/')[-1].split('_')[0]}_len{min_contig_length}_cov{min_contig_coverage}_{input_cat}_binary_direct_count_table.csv")
-            # df_export = pandas.DataFrame.from_dict(summary_table_final_count_dict, orient='index')
-            # pandas.DataFrame(df_export).to_csv(f"{os.getcwd()}/{input_annotation.split('/')[-1].split('_')[0]}_len{min_contig_length}_cov{min_contig_coverage}_{input_cat}_binary_direct_count_table.csv", index=True, header=False)
     else:
         dict_to_csv(summary_table_final_count_dict, f"{os.getcwd()}/{input_annotation.split('/')[-1].split('_')[0]}_len{min_contig_length}_cov{min_contig_coverage}_{input_cat}_{cov_method}_direct_count_table.csv")
-        # df_export = pandas.DataFrame.from_dict(summary_table_final_count_dict, orient='index')
-        # # df_export = df_export.sort_values(0, ascending=False) # sort_output
-        # pandas.DataFrame(df_export).to_csv(f"{os.getcwd()}/{input_annotation.split('/')[-1].split('_')[0]}_len{min_contig_length}_cov{min_contig_coverage}_{input_cat}_{cov_method}_direct_count_table.csv", index=True, header=False)
 
 def _convert_go_count_table_to_other_annotation(summary_table_final_count, input_annotation, input_cat, cov_method, go_xref_tables, binary_output, min_contig_length, min_contig_coverage):
     print("\nGO count table production complete - converting GO to other name spaces using translation tables.")
@@ -221,8 +216,6 @@ def _convert_go_count_table_to_other_annotation(summary_table_final_count, input
             for x in xref_summary_table_final_count_dict:
                 xref_summary_table_final_count_dict[x] = 1
         dict_to_csv(xref_summary_table_final_count_dict, outfile_path)
-        # df_export = pandas.DataFrame.from_dict(xref_summary_table_final_count_dict, orient='index')
-        # pandas.DataFrame(df_export).to_csv(outfile_path, index=True, header=False)
 
 def scan_and_summarize_output(
     output_file_prefix,  # like "<mg_id>_len2000_cov5_GO_weighted"
