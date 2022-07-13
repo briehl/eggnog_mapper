@@ -399,6 +399,7 @@ def get_mapper_args(arg_list: List[str]):
     # make args a little more sensible
     if args.binary_output == "Yes":
         args.use_coverage = False
+        print("Binary output is selected, not using coverage for weighting")
     return args
 
 if __name__ == '__main__':
