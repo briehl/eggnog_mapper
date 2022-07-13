@@ -17,8 +17,11 @@ from .util import (
     dict_to_csv
 )
 from .contigs import (
+    load_contig_coverage,
+    load_contig_filter,
     summarize_contig_lengths,
-    filter_contig_lengths
+    filter_contig_lengths,
+    get_allowed_contigs
 )
 from typing import List
 
@@ -62,54 +65,32 @@ from typing import List
 # pca exploration of output
 # add FAMA and other modules
 
-
-# import annotation and contig fasta file and, if existing, coverage data
-def import_data(
-    input_annotation_file: str,
-    use_coverage: bool,
-    input_coverage_file: str,
-    contig_filter_file: str,
-    min_contig_coverage: int,
-    verbose: bool
-):
-    """
-    :param input_annotation_file: annotation file path
-    :param use_coverage: boolean
-    :param input_coverage_file: coverage file path,
-    :param contig_filter: str or "NULL" contig filter file path
-    :param min_contig_coverage: int minimum contig coverage to use - other contigs are discarded
-    :returns:
-    annotation_data - dataframe with annotation data
-    coverages - dataframe of contig coverage counts
-    contig_filter - set of contigs to be removed, either by being in the contig_filter file or
-    """
-    # import annotation data
-    input_annotation_path = os.path.abspath(input_annotation_file)
-    annotation_data = pandas.read_csv(input_annotation_path, delimiter='\t', header=None, names=["query_name", "seed_eggNOG_ortholog", "seed_ortholog_evalue", "seed_ortholog_score", "best_tax_level", "Preferred_name", "GO", "EC", "KEGG_ko", "KEGG_Pathway", "KEGG_Module", "KEGG_Reaction", "KEGG_rclass", "BRITE", "KEGG_TC", "CAZy", "BiGG_Reaction", "taxonomic_scope", "eggNOG_OGs", "best_eggNOG_OG", "COG", "eggNOG_free_text_desc"])
-    contig_filter = set()     # contigs not to be used
-    if contig_filter_file != "NULL":
-        contig_filter_path = os.path.abspath(contig_filter_file)
-        with open(contig_filter_path) as z:
-            contig_filter = set(z.read().splitlines())
-        if verbose:
-            print("ignoring contigs from contig filter file")
-            print(f"{len(contig_filter)} contigs ignored")
-    coverages = {}
-    if use_coverage or min_contig_coverage > 0:  # if coverage being used then load file
-        input_coverage_file = os.path.abspath(input_coverage_file)
-        with open(input_coverage_file, "r") as cov_file:
-            cov_lines = cov_file.readlines()
-            for line in cov_lines:
-                row = line.strip().split('\t')
-                # just contig_name and coverage_value here
-                coverage = int(row[1])
-                contig_id = row[0]
-                coverages[contig_id] = coverage
-                if coverage < min_contig_coverage:
-                    if verbose:
-                        print(f"filtering contig {contig_id} with coverage {coverage}")
-                    contig_filter.add(contig_id)
-    return annotation_data, coverages, contig_filter
+def load_annotation_file(input_annotation_file: str) -> pandas.DataFrame:
+    annotation_file_cols = [
+        "query_name",
+        "seed_eggNOG_ortholog",
+        "seed_ortholog_evalue",
+        "seed_ortholog_score",
+        "best_tax_level",
+        "Preferred_name",
+        "GO",
+        "EC",
+        "KEGG_ko",
+        "KEGG_Pathway",
+        "KEGG_Module",
+        "KEGG_Reaction",
+        "KEGG_rclass",
+        "BRITE",
+        "KEGG_TC",
+        "CAZy",
+        "BiGG_Reaction",
+        "taxonomic_scope",
+        "eggNOG_OGs",
+        "best_eggNOG_OG",
+        "COG",
+        "eggNOG_free_text_desc"
+    ]
+    return pandas.read_csv(os.path.abspath(input_annotation_file), delimiter='\t', header=None, names=annotation_file_cols)
 
 # needed to detect transition to a new contig so that summary step executes to combine with coverage data on a per-contig basis
 def _contig_summary_trigger(annotation_data, i):
@@ -163,7 +144,6 @@ def _summarize_contig_module(f, summary_table, running_contig_non_hits, contig_r
     contig_length = "NA"
     # determine the majority taxonmony for a contig
     consensus_taxonomy, consensus_taxonomy_frequency = _determine_consensus_taxonomy(taxonomic_scope, taxonomy_consensus_threshold, contig_running_count)
-    # speed optimization using numpy
     if contig_id in contig_length_data:
         contig_length = contig_length_data[contig_id]
     if cov_method == "weighted":
@@ -317,20 +297,14 @@ def run_mapper(args):
     fasta_summary_file = os.path.join(f"{output_dir}", f"{input_fasta_prefix}_contig_length_summary.tsv")
 
     contig_lengths = summarize_contig_lengths(input_fasta, fasta_summary_file)
-    contig_length_filter = filter_contig_lengths(contig_lengths, args.min_contig_length)
-
-    all_contigs = contig_lengths.keys()
-    # import annotation and coverage data, filter by coverage and input contig list
-    annotation_data, coverages, contig_import_filter = import_data(
-        args.input_annotation,      # input annotation file
-        args.use_coverage,          # boolean whether to weight by coverage
-        args.input_coverage,        # input coverage file
-        args.contig_filter,         # optional list of contigs to include
-        args.min_contig_coverage,   # minimum contig coverage required
-        args.verbose
-    )
-
-    contigs_allowed = set(all_contigs) - contig_length_filter - contig_import_filter
+    annotation_data = load_annotation_file(args.input_annotation)
+    coverage_data = dict()
+    if args.use_coverage or args.min_contig_coverage > 0:
+        coverage_data = load_contig_coverage(args.input_coverage)
+    filtered_contigs = set()
+    if args.contig_filter is not None:
+        filtered_contigs = load_contig_filter(args.contig_filter)
+    contigs_allowed = get_allowed_contigs(contig_lengths, coverage_data, filtered_contigs, args.min_contig_coverage, args.min_contig_length)
 
     input_category_options = [
         "GO", "EC", "KEGG_ko", "COG", "KEGG_Module", "KEGG_Reaction", "KEGG_rclass", "BRITE", "KEGG_TC", "CAZy", "BiGG_Reaction", "eggNOG_OGs"
@@ -361,7 +335,7 @@ def run_mapper(args):
             args.input_cat,
             cov_method,
             annotation_data,
-            coverages,
+            coverage_data,
             contigs_allowed,
             args.make_go_xref,
             args.binary_output,
@@ -407,7 +381,7 @@ def get_mapper_args(arg_list: List[str]):
     parser.add_argument("--input_cov", dest="input_coverage", help="Indicate the tab-separted contig coverage file for input. ")
     parser.add_argument("--min_contig_length", dest="min_contig_length", type=int, default=2000, help="Indicate the minimum contig length to include in final count table (default: 2000).")
     parser.add_argument("--min_contig_coverage", dest="min_contig_coverage", type=int, default=5, help="Indicate the minimum average contig coverage required to include in final count table (default: 5).")
-    parser.add_argument("--contig_filter", dest="contig_filter", default="NULL", help="Indicate the contigs to retain for the output (i.e. contigs not listed will be filtered before count tables produced).")
+    parser.add_argument("--contig_filter", dest="contig_filter", default=None, help="Indicate the contigs to retain for the output (i.e. contigs not listed will be filtered before count tables produced).")
     parser.add_argument("--eggnog_category", dest="input_cat", default="GO", help="Indicate the eggnog mapper annotation ontology to use for mapping. (options: ALL_CATEGORIES, GO, EC, KEGG_ko, COG, KEGG_Module, KEGG_Reaction, KEGG_rclass, BRITE, KEGG_TC, CAZy, BiGG_Reaction, eggNOG_OGs (default: GO))")
     parser.add_argument("--use_cov", dest="use_coverage", default=False, action="store_true", help="Indicate if contig coverage information should be used to produce a weighted output count table. (default: False)")
     parser.add_argument("--binary", dest="binary_output", default="No", help="Indicate if the output should just indicate hit presence/absence. (default: No)")

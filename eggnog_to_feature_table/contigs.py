@@ -2,7 +2,8 @@
 Tools for handling contigs and contig files
 """
 from Bio import SeqIO
-from typing import Dict, Set
+from typing import Any, Dict, Set, Union
+import os
 
 def summarize_contig_lengths(input_fasta_path: str, output_path: str) -> Dict[str, int]:
     """
@@ -56,4 +57,38 @@ def filter_contig_lengths(contig_lengths: Dict[str, int], min_contig_length: int
         if contig_length < min_contig_length:
             filtered_contigs.add(contig_id)
     return filtered_contigs
+
+def load_contig_coverage(contig_cov_file: str) -> Dict[str, int]:
+    coverages = {}
+    with open(os.path.abspath(contig_cov_file), "r") as cov_file:
+        for line in cov_file:
+            row = line.strip().split('\t')
+            coverages[row[0]] = int(row[1])
+    return coverages
+
+def load_contig_filter(contig_filter_file: str) -> Set[str]:
+    contigs = set()
+    with open(os.path.abspath(contig_filter_file), "r") as filter_file:
+        for line in filter_file:
+            contigs.add(line.strip())
+    return contigs
+
+def get_allowed_contigs(contig_lengths: Dict[str, int], contig_coverage: Dict[str, int], filtered_contigs: Set[str], min_coverage: int, min_length: int) -> Set[str]:
+    if len(contig_lengths) != len(contig_coverage):
+        print(
+            "WARNING: number of contigs with known lengths is not equal to number of contigs with coverage data\n",
+            "  Ignoring length or coverage requirement if those contig ids are not present."
+        )
+        print("Contigs with length and not coverage:")
+        print("\n".join(contig_lengths.keys() - contig_coverage.keys()))
+        print("Contigs with coverage and not length:")
+        print("\n".join(contig_coverage.keys() - contig_lengths.keys()))
+    allowed = set()
+    all_contigs = contig_lengths.keys() | contig_coverage.keys()
+    for contig in all_contigs:
+        if contig_lengths.get(contig, min_length) >= min_length and \
+            contig_coverage.get(contig, min_coverage) and \
+            contig not in filtered_contigs:
+            allowed.add(contig)
+    return allowed
 
