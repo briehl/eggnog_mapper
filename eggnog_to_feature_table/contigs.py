@@ -33,14 +33,20 @@ def summarize_contig_lengths(input_fasta_path: str, output_path: str) -> Dict[st
     """
     fasta_file = open(input_fasta_path, 'r')
     contig_lengths = {}
+    contigs_order = []
 
-    with open(output_path, "w") as f:
-        for rec in SeqIO.parse(fasta_file, 'fasta'):
-            name = rec.id
-            seq_len = len(rec)
-            contig_lengths[name] = seq_len
-            f.write("{}\t{}\n".format(name, seq_len))
+    for rec in SeqIO.parse(fasta_file, 'fasta'):
+        name = rec.id
+        seq_len = len(rec)
+        contig_lengths[name] = seq_len
+        contigs_order.append(name)
     fasta_file.close()
+
+    if output_path is not None:
+        with open(output_path, "w") as outfile:
+            for contig_id in contigs_order:
+                outfile.write("{}\t{}\n".format(contig_id, contig_lengths[contig_id]))
+
     return contig_lengths
 
 def filter_contig_lengths(contig_lengths: Dict[str, int], min_contig_length: int) -> Set[str]:

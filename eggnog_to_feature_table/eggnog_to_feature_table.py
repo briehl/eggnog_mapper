@@ -10,6 +10,7 @@ import sys
 import pandas
 import argparse
 import time
+import math
 from collections import Counter, defaultdict
 from .go_xref import GO_Xrefs
 from .util import (
@@ -21,6 +22,10 @@ from .contigs import (
     load_contig_filter,
     summarize_contig_lengths,
     get_allowed_contigs
+)
+from .annotations import (
+    load_annotations,
+    query_to_contig_id
 )
 from typing import List
 
@@ -64,32 +69,6 @@ from typing import List
 # pca exploration of output
 # add FAMA and other modules
 
-def load_annotation_file(input_annotation_file: str) -> pandas.DataFrame:
-    annotation_file_cols = [
-        "query_name",
-        "seed_eggNOG_ortholog",
-        "seed_ortholog_evalue",
-        "seed_ortholog_score",
-        "best_tax_level",
-        "Preferred_name",
-        "GO",
-        "EC",
-        "KEGG_ko",
-        "KEGG_Pathway",
-        "KEGG_Module",
-        "KEGG_Reaction",
-        "KEGG_rclass",
-        "BRITE",
-        "KEGG_TC",
-        "CAZy",
-        "BiGG_Reaction",
-        "taxonomic_scope",
-        "eggNOG_OGs",
-        "best_eggNOG_OG",
-        "COG",
-        "eggNOG_free_text_desc"
-    ]
-    return pandas.read_csv(os.path.abspath(input_annotation_file), delimiter='\t', header=None, names=annotation_file_cols)
 
 # needed to detect transition to a new contig so that summary step executes to combine with coverage data on a per-contig basis
 def _contig_summary_trigger(annotation_data, i):
@@ -261,13 +240,89 @@ def scan_and_summarize_output(
         if make_go_xref == "Yes" and input_cat == "GO":
             _convert_go_count_table_to_other_annotation(summary_table_final_count, input_annotation, input_cat, cov_method, go_xrefs, binary_output, min_contig_length, min_contig_coverage)
 
-def run_mapper(args):
-    starttime = time.time()
+def build_data_summary(args):
+    """
+    Data summary means build a data QA file, with:
+    1. number of annotation queries
+    2. contig annotation, featur
+    3. log the following:
+      a. contigs without length or coverage or annotations - any contig that's not in all 3 files
+         should get logged as suspicious
+
+    contig id | length | coverage | num queries/features/CDSes, whatever that is.
+    empty spaces are used for data not present.
+    """
+    fasta_file = args.input_contig_fasta
+    coverage_file = args.input_coverage
+    annotation_file = args.input_annotation
+    min_coverage = args.min_contig_coverage
+    min_length = args.min_contig_length
+
+    summary_file = os.path.basename(fasta_file).split("_")[0] + "_contig_data_summary.tsv"
+
+    annotations = load_annotations(annotation_file)
+    coverage = load_contig_coverage(coverage_file)
+    lengths = summarize_contig_lengths(fasta_file, None)
+
+    annotation_summary = defaultdict(int)
+    for _, row in annotations.iterrows():
+        contig_id = query_to_contig_id(row["query_name"])
+        annotation_summary[contig_id] += 1
+
+    print(f"Annotation file: {annotation_file}")
+    print(f"FASTA file: {fasta_file}")
+    print(f"Coverage file: {coverage_file}")
+    print(f"Minimum coverage: {min_coverage}")
+    print(f"Minimum contig length: {min_length}")
+
+    print(f"annotation file contigs: {len(annotation_summary)}")
+    print(f"FASTA file contigs: {len(lengths)}")
+    print(f"coverage file contigs: {len(coverage)}")
+
+    # now, compare and contrast, print out diffs
+    anno_contigs = set(annotation_summary.keys())
+    coverage_contigs = set(coverage.keys())
+    lengths_contigs = set(lengths.keys())
+    all_contigs = anno_contigs.union(coverage_contigs, lengths_contigs)
+
+    pass_coverage = 0
+    for cov_val in coverage.values():
+        if cov_val >= min_coverage:
+            pass_coverage += 1
+
+    pass_length = 0
+    for len_val in lengths.values():
+        if len_val >= min_length:
+            pass_length += 1
+
+    print(f"Contigs with acceptable coverage: {pass_coverage} ({round(pass_coverage/len(coverage_contigs), 2)}% of coverage contigs, {round(pass_coverage/len(all_contigs), 2)}% of all contigs)")
+    print(f"Contigs with acceptable length: {pass_length} ({round(pass_length/len(lengths_contigs), 2)}% of coverage contigs, {round(pass_length/len(all_contigs), 2)}% of all contigs)")
+
+    set_diffs = {
+        "annotation_coverage": anno_contigs - coverage_contigs,
+        "annotation_length": anno_contigs - lengths_contigs,
+        "coverage_annotation": coverage_contigs - anno_contigs,
+        "coverage_length": coverage_contigs - lengths_contigs,
+        "length_annotation": lengths_contigs - anno_contigs,
+        "length_coverage": lengths_contigs - coverage_contigs
+    }
+
+    for key in set_diffs.keys():
+        first, second = key.split("_")
+        print(f"Contigs in {first} without {second}: {len(set_diffs[key])}")
+
+    with open(summary_file, "w") as summary:
+        for contig in all_contigs:
+            summary.write("{}\t{}\t{}\t{}\n".format(contig, annotation_summary.get(contig, ""), lengths.get(contig, ""), coverage.get(contig, "")))
+
+
+def build_full_mapping(args):
     if args.binary_output == "Yes" and args.use_coverage:
         print("Binary output selected, adjusted coverage setting to maximize program performance")
         args.use_coverage = False
     if (not args.input_cat == "ALL_CATEGORIES") and (not args.input_cat == "GO") and (not args.input_cat == "EC") and (not args.input_cat == "KEGG_ko") and (not args.input_cat == "COG") and (not args.input_cat == "KEGG_Module") and (not args.input_cat == "KEGG_Reaction") and (not args.input_cat == "KEGG_rclass") and (not args.input_cat == "BRITE") and (not args.input_cat == "KEGG_TC") and (not args.input_cat == "CAZy") and (not args.input_cat == "BiGG_Reaction") and (not args.input_cat == "eggNOG_OGs"):
         sys.exit("Bad category selection, please review options. Exiting...")
+
     input_fasta = args.input_contig_fasta
     print('''
 ***************************************************************************
@@ -296,7 +351,7 @@ def run_mapper(args):
     fasta_summary_file = os.path.join(f"{output_dir}", f"{input_fasta_prefix}_contig_length_summary.tsv")
 
     contig_lengths = summarize_contig_lengths(input_fasta, fasta_summary_file)
-    annotation_data = load_annotation_file(args.input_annotation)
+    annotation_data = load_annotations(args.input_annotation)
     coverage_data = dict()
     if args.use_coverage or args.min_contig_coverage > 0:
         coverage_data = load_contig_coverage(args.input_coverage)
@@ -349,6 +404,14 @@ def run_mapper(args):
 *                                 App end                                 *
 ***************************************************************************
     ''')
+
+def run_mapper(args):
+    starttime = time.time()
+    if args.summary_only:
+        build_data_summary(args)
+    else:
+        build_full_mapping(args)
+
     print("App ran in %s seconds." % round((time.time() - starttime), 2))
     return 0
 
@@ -366,10 +429,11 @@ def get_mapper_args(arg_list: List[str]):
             "\t--min_contig_coverage [min_contig_coverage] \ \n"
             "\t--contig_filter [contig_filter] \ \n"
             "\t--eggnog_catgory [input_cat] \ \n"
-            "\t--use_cov [use_coverage] \ \n"
+            "\t--use_cov \n"
             "\t--binary [binary_output] \ \n"
             "\t--contig_taxa_threshold [taxonomy_consensus_threshold] \ \n"
-            "\t--go_xref [make_go_xref] \ \n"),
+            "\t--go_xref [make_go_xref] \ \n",
+            "\t--summary_only\n"),
         description=description_text,
         formatter_class=argparse.RawTextHelpFormatter
     )
@@ -387,6 +451,7 @@ def get_mapper_args(arg_list: List[str]):
     parser.add_argument("--contig_taxa_threshold", dest="taxonomy_consensus_threshold", default=0.5, help="Indicate the frequency threshold for determining contig consensus taxonomy. (default: 0.5)")
     parser.add_argument("--go_xref", dest="make_go_xref", default="Yes", help="Indicate if input_cat is GO then generate cross-reference tables. (default: Yes)")
     parser.add_argument("--go_xref_loc", dest="go_xref_loc", default=".", help="Path to a directory containing GO cross-reference tables")
+    parser.add_argument("--summary_only", dest="summary_only", default=False, action="store_true", help="Only create a QA summary file with contig length and coverage")
     parser.add_argument("--version", action="version", version='%(prog)s v2.0')
     parser.add_argument("--verbose", dest="verbose", default=False, action="store_true", help="Extra verbose output")
 
