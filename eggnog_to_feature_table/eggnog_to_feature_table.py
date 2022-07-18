@@ -20,7 +20,6 @@ from .contigs import (
     load_contig_coverage,
     load_contig_filter,
     summarize_contig_lengths,
-    filter_contig_lengths,
     get_allowed_contigs
 )
 from typing import List

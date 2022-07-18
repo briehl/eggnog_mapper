@@ -18,7 +18,8 @@ from util import (
 )
 from contigs import (
     summarize_contig_lengths,
-    filter_contig_lengths
+    filter_contig_lengths,
+    load_contig_coverage
 )
 
 
@@ -62,29 +63,52 @@ from contigs import (
 # add FAMA and other modules
 
 
+def load_annotation_file(input_annotation_file: str) -> pandas.DataFrame:
+    annotation_file_cols = [
+        "query_name",
+        "seed_eggNOG_ortholog",
+        "seed_ortholog_evalue",
+        "seed_ortholog_score",
+        "best_tax_level",
+        "Preferred_name",
+        "GO",
+        "EC",
+        "KEGG_ko",
+        "KEGG_Pathway",
+        "KEGG_Module",
+        "KEGG_Reaction",
+        "KEGG_rclass",
+        "BRITE",
+        "KEGG_TC",
+        "CAZy",
+        "BiGG_Reaction",
+        "taxonomic_scope",
+        "eggNOG_OGs",
+        "best_eggNOG_OG",
+        "COG",
+        "eggNOG_free_text_desc"
+    ]
+    return pandas.read_csv(os.path.abspath(input_annotation_file), delimiter='\t', header=None, names=annotation_file_cols)
+
+
 # import annotation and contig fasta file and, if existing, coverage data
 def import_data(
-    input_annotation_file: str,
-    use_coverage: bool,
     input_coverage_file: str,
     contig_filter_file: str,
+    use_coverage: bool,
     min_contig_coverage: int,
     verbose: bool
 ):
     """
-    :param input_annotation_file: annotation file path
     :param use_coverage: boolean
     :param input_coverage_file: coverage file path,
     :param contig_filter: str or "NULL" contig filter file path
     :param min_contig_coverage: int minimum contig coverage to use - other contigs are discarded
     :returns:
-    annotation_data - dataframe with annotation data
-    coverages - dataframe of contig coverage counts
+    coverages - dictionary of contig coverage counts
     contig_filter - set of contigs to be removed, either by being in the contig_filter file or
     """
     # import annotation data
-    input_annotation_path = os.path.abspath(input_annotation_file)
-    annotation_data = pandas.read_csv(input_annotation_path, delimiter='\t', header=None, names=["query_name", "seed_eggNOG_ortholog", "seed_ortholog_evalue", "seed_ortholog_score", "best_tax_level", "Preferred_name", "GO", "EC", "KEGG_ko", "KEGG_Pathway", "KEGG_Module", "KEGG_Reaction", "KEGG_rclass", "BRITE", "KEGG_TC", "CAZy", "BiGG_Reaction", "taxonomic_scope", "eggNOG_OGs", "best_eggNOG_OG", "COG", "eggNOG_free_text_desc"])
     contig_filter = set()     # contigs not to be used
     if contig_filter_file != "NULL":
         contig_filter_path = os.path.abspath(contig_filter_file)
@@ -97,18 +121,17 @@ def import_data(
     if use_coverage or min_contig_coverage > 0:  # if coverage being used then load file
         input_coverage_file = os.path.abspath(input_coverage_file)
         with open(input_coverage_file, "r") as cov_file:
-            cov_lines = cov_file.readlines()
-            for line in cov_lines:
+            for _, line in enumerate(cov_file):
                 row = line.strip().split('\t')
                 # just contig_name and coverage_value here
-                coverage = int(row[1])
+                coverage = float(row[1])
                 contig_id = row[0]
                 coverages[contig_id] = coverage
                 if coverage < min_contig_coverage:
                     if verbose:
                         print(f"filtering contig {contig_id} with coverage {coverage}")
                     contig_filter.add(contig_id)
-    return annotation_data, coverages, contig_filter
+    return coverages, contig_filter
 
 # needed to detect transition to a new contig so that summary step executes to combine with coverage data on a per-contig basis
 def _contig_summary_trigger(annotation_data, i):
@@ -326,11 +349,14 @@ def run_mapper(args):
 
     all_contigs = contig_lengths.keys()
     # import annotation and coverage data, filter by coverage and input contig list
+    annotation_data = load_annotation_file(args.input_annotation)
+    if args.use_coverage or args.min_contig_coverage > 0:
+        coverage = load_contig_coverage
+
     annotation_data, coverages, contig_import_filter = import_data(
-        args.input_annotation,      # input annotation file
-        args.use_coverage,          # boolean whether to weight by coverage
         args.input_coverage,        # input coverage file
         args.contig_filter,         # optional list of contigs to include
+        args.use_coverage,          # boolean whether to weight by coverage
         args.min_contig_coverage,   # minimum contig coverage required
         args.verbose
     )

@@ -79,15 +79,15 @@ def get_allowed_contigs(contig_lengths: Dict[str, int], contig_coverage: Dict[st
             "WARNING: number of contigs with known lengths is not equal to number of contigs with coverage data\n",
             "  Ignoring length or coverage requirement if those contig ids are not present."
         )
-        print("Contigs with length and not coverage:")
+        print(f"Contigs with length and not coverage ({len(contig_lengths.keys() - contig_coverage.keys())}):")
         print("\n".join(contig_lengths.keys() - contig_coverage.keys()))
-        print("Contigs with coverage and not length:")
+        print(f"Contigs with coverage and not length ({len(contig_coverage.keys() - contig_lengths.keys())}):")
         print("\n".join(contig_coverage.keys() - contig_lengths.keys()))
     allowed = set()
     all_contigs = contig_lengths.keys() | contig_coverage.keys()
     for contig in all_contigs:
         if contig_lengths.get(contig, min_length) >= min_length and \
-            contig_coverage.get(contig, min_coverage) and \
+            contig_coverage.get(contig, min_coverage) >= min_coverage and \
             contig not in filtered_contigs:
             allowed.add(contig)
     return allowed
