@@ -300,8 +300,15 @@ def build_data_summary(args, write_outfile=True):
         if len_val >= min_length:
             pass_length += 1
 
+    pass_contigs = 0
+    for contig_id in all_contigs:
+        if contig_id in coverage and contig_id in lengths:
+            if coverage[contig_id] >= min_coverage and lengths[contig_id] >= min_length:
+                pass_contigs += 1
+
     print(f"Contigs with acceptable coverage: {pass_coverage} ({round(pass_coverage/len(coverage_contigs)*100, 2)}% of coverage contigs, {round(pass_coverage/len(all_contigs)*100, 2)}% of all contigs)")
     print(f"Contigs with acceptable length: {pass_length} ({round(pass_length/len(lengths_contigs)*100, 2)}% of coverage contigs, {round(pass_length/len(all_contigs)*100, 2)}% of all contigs)")
+    print(f"Acceptable contigs: {pass_contigs} ({round(pass_contigs/len(all_contigs)*100.0)}%)")
 
     set_diffs = {
         "annotation_coverage": len(anno_contigs - coverage_contigs),
@@ -324,6 +331,7 @@ def build_data_summary(args, write_outfile=True):
 
     set_diffs["pass_coverage"] = pass_coverage
     set_diffs["pass_length"] = pass_length
+    set_diffs["pass_contigs"] = pass_contigs
     set_diffs["total_contigs"] = len(all_contigs)
     set_diffs["total_annotations"] = sum(annotation_summary.values())
     set_diffs["fasta_contigs"] = len(lengths_contigs)
