@@ -240,9 +240,9 @@ def scan_and_summarize_output(
         if make_go_xref == "Yes" and input_cat == "GO":
             _convert_go_count_table_to_other_annotation(summary_table_final_count, input_annotation, input_cat, cov_method, go_xrefs, binary_output, min_contig_length, min_contig_coverage)
 
-def build_data_summary(args):
+def build_data_summary(args, write_outfile=True):
     """
-    Data summary means build a data QA file, with:
+    This builds a data QA file, with:
     1. number of annotation queries
     2. contig annotation, featur
     3. log the following:
@@ -295,25 +295,31 @@ def build_data_summary(args):
         if len_val >= min_length:
             pass_length += 1
 
-    print(f"Contigs with acceptable coverage: {pass_coverage} ({round(pass_coverage/len(coverage_contigs), 2)}% of coverage contigs, {round(pass_coverage/len(all_contigs), 2)}% of all contigs)")
-    print(f"Contigs with acceptable length: {pass_length} ({round(pass_length/len(lengths_contigs), 2)}% of coverage contigs, {round(pass_length/len(all_contigs), 2)}% of all contigs)")
+    print(f"Contigs with acceptable coverage: {pass_coverage} ({round(pass_coverage/len(coverage_contigs)*100, 2)}% of coverage contigs, {round(pass_coverage/len(all_contigs)*100, 2)}% of all contigs)")
+    print(f"Contigs with acceptable length: {pass_length} ({round(pass_length/len(lengths_contigs)*100, 2)}% of coverage contigs, {round(pass_length/len(all_contigs)*100, 2)}% of all contigs)")
 
     set_diffs = {
-        "annotation_coverage": anno_contigs - coverage_contigs,
-        "annotation_length": anno_contigs - lengths_contigs,
-        "coverage_annotation": coverage_contigs - anno_contigs,
-        "coverage_length": coverage_contigs - lengths_contigs,
-        "length_annotation": lengths_contigs - anno_contigs,
-        "length_coverage": lengths_contigs - coverage_contigs
+        "annotation_coverage": len(anno_contigs - coverage_contigs),
+        "annotation_length": len(anno_contigs - lengths_contigs),
+        "coverage_annotation": len(coverage_contigs - anno_contigs),
+        "coverage_length": len(coverage_contigs - lengths_contigs),
+        "length_annotation": len(lengths_contigs - anno_contigs),
+        "length_coverage": len(lengths_contigs - coverage_contigs)
     }
 
     for key in set_diffs.keys():
         first, second = key.split("_")
-        print(f"Contigs in {first} without {second}: {len(set_diffs[key])}")
+        print(f"Contigs in {first} without {second}: {set_diffs[key]}")
 
-    with open(summary_file, "w") as summary:
-        for contig in all_contigs:
-            summary.write("{}\t{}\t{}\t{}\n".format(contig, annotation_summary.get(contig, ""), lengths.get(contig, ""), coverage.get(contig, "")))
+    if write_outfile:
+        with open(summary_file, "w") as summary:
+            for contig in all_contigs:
+                summary.write("{}\t{}\t{}\t{}\n".format(contig, annotation_summary.get(contig, ""), lengths.get(contig, ""), coverage.get(contig, "")))
+
+    set_diffs["pass_coverage"] = pass_coverage
+    set_diffs["pass_length"] = pass_length
+    set_diffs["total_contigs"] = len(all_contigs)
+    return set_diffs
 
 
 def build_full_mapping(args):
@@ -432,7 +438,7 @@ def get_mapper_args(arg_list: List[str]):
             "\t--use_cov \n"
             "\t--binary [binary_output] \ \n"
             "\t--contig_taxa_threshold [taxonomy_consensus_threshold] \ \n"
-            "\t--go_xref [make_go_xref] \ \n",
+            "\t--go_xref [make_go_xref] \ \n"
             "\t--summary_only\n"),
         description=description_text,
         formatter_class=argparse.RawTextHelpFormatter
@@ -452,6 +458,7 @@ def get_mapper_args(arg_list: List[str]):
     parser.add_argument("--go_xref", dest="make_go_xref", default="Yes", help="Indicate if input_cat is GO then generate cross-reference tables. (default: Yes)")
     parser.add_argument("--go_xref_loc", dest="go_xref_loc", default=".", help="Path to a directory containing GO cross-reference tables")
     parser.add_argument("--summary_only", dest="summary_only", default=False, action="store_true", help="Only create a QA summary file with contig length and coverage")
+    parser.add_argument("--summary_file", dest="summary_file", default=None, help="optional path to output data summary file")
     parser.add_argument("--version", action="version", version='%(prog)s v2.0')
     parser.add_argument("--verbose", dest="verbose", default=False, action="store_true", help="Extra verbose output")
 

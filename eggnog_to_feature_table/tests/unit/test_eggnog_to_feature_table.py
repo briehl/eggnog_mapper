@@ -1,10 +1,12 @@
 from copy import copy
 import pytest
-import os
+from os import path
 from eggnog_to_feature_table.eggnog_to_feature_table import (
     get_mapper_args,
-    run_mapper
+    run_mapper,
+    build_data_summary
 )
+import tempfile
 
 DEFAULT_ARGS = {
     "input_annotation": None,
@@ -30,11 +32,15 @@ ARGS_CASES = [
     (["-i", "foo.tsv", "--use_cov"], {"input_annotation": "foo.tsv", "use_coverage": True})
 ]
 
-cur_dir = os.path.dirname(__file__)
+cur_dir = path.dirname(__file__)
 
-TEST_INPUT_ANNOTATION = os.path.join(cur_dir, "../data/test_annotation.tsv")
-TEST_INPUT_FASTA = os.path.join(cur_dir, "../data/test_fasta.fasta")
-TEST_INPUT_COVERAGE =os.path.join(cur_dir,  "../data/test_coverage.tsv")
+TEST_INPUT_ANNOTATION = path.join(cur_dir, "../data/test_annotation.tsv")
+TEST_INPUT_FASTA = path.join(cur_dir, "../data/test_fasta.fasta")
+TEST_INPUT_COVERAGE =path.join(cur_dir,  "../data/test_coverage.tsv")
+
+SUMMARY_ANNOTATION = path.join(cur_dir, "../data/summary_annotation.tsv")
+SUMMARY_FASTA = path.join(cur_dir, "../data/summary_fasta.fasta")
+SUMMARY_COVERAGE =path.join(cur_dir,  "../data/summary_coverage.tsv")
 
 @pytest.mark.parametrize("input,expected", ARGS_CASES)
 def test_get_mapper_args(input, expected):
@@ -52,3 +58,28 @@ def test_run_mapper_weighted_coverage():
 
 def test_run_mapper_unweighted():
     pass
+
+def test_run_app_summary_only():
+    """
+    run the whole app with parameters, etc., expect only the summary mode to run
+    """
+    pass
+
+def test_build_data_summary_ok():
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        summary_file_path = path.join(tmpdirname, "test_summary_file.tsv")
+        summary_log_path = path.join(tmpdirname, "test_summary_log.log")
+        summary_inputs = [
+            "-i", SUMMARY_ANNOTATION,
+            "--input_contig_fasta", SUMMARY_FASTA,
+            "--input_cov", SUMMARY_COVERAGE,
+            "--min_contig_coverage", "5",
+            "--min_contig_length", "10",
+            "--summary_only",
+            "--summary_file", summary_file_path
+        ]
+        args = get_mapper_args(summary_inputs)
+        build_data_summary(args)
+
+        with open(summary_file_path) as infile:
+            print(infile.readlines())
