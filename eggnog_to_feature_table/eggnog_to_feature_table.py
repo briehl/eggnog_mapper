@@ -258,7 +258,10 @@ def build_data_summary(args, write_outfile=True):
     min_coverage = args.min_contig_coverage
     min_length = args.min_contig_length
 
-    summary_file = os.path.basename(fasta_file).split("_")[0] + "_contig_data_summary.tsv"
+    if args.summary_file is not None:
+        summary_file = args.summary_file
+    else:
+        summary_file = os.path.basename(fasta_file).split("_")[0] + "_contig_data_summary.tsv"
 
     annotations = load_annotations(annotation_file)
     coverage = load_contig_coverage(coverage_file)
