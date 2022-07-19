@@ -316,6 +316,7 @@ def build_data_summary(args, write_outfile=True):
 
     if write_outfile:
         with open(summary_file, "w") as summary:
+            summary.write("\t".join(["contig id", "annotations", "length", "coverage"]) + "\n")
             for contig in all_contigs:
                 summary.write("{}\t{}\t{}\t{}\n".format(contig, annotation_summary.get(contig, ""), lengths.get(contig, ""), coverage.get(contig, "")))
 
