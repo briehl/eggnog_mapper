@@ -1,0 +1,15 @@
+Minimum coverage: 5
+Minimum contig length: 10
+annotation file contigs: 20
+FASTA file contigs: 20
+coverage file contigs: 20
+Contigs with acceptable coverage: 20 (100.0% of coverage contigs, 33.33% of all contigs)
+Contigs with acceptable length: 20 (100.0% of length contigs, 33.33% of all contigs)
+Acceptable contigs: 0 (0.0%)
+Contigs in annotation without coverage: 20
+Contigs in annotation without length: 20
+Contigs in coverage without annotation: 20
+Contigs in coverage without length: 20
+Contigs in length without annotation: 20
+Contigs in length without coverage: 20
+

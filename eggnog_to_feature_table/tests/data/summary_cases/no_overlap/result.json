@@ -1,0 +1,16 @@
+{
+    "annotation_coverage": 20,
+    "annotation_length": 20,
+    "coverage_annotation": 20,
+    "coverage_length": 20,
+    "length_annotation": 20,
+    "length_coverage": 20,
+    "pass_coverage": 20,
+    "pass_length": 20,
+    "pass_contigs": 0,
+    "total_contigs": 60,
+    "total_annotations": 60,
+    "fasta_contigs": 20,
+    "annotation_contigs": 20,
+    "coverage_contigs": 20
+}

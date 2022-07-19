@@ -307,8 +307,8 @@ def build_data_summary(args, write_outfile=True):
                 pass_contigs += 1
 
     print(f"Contigs with acceptable coverage: {pass_coverage} ({round(pass_coverage/len(coverage_contigs)*100, 2)}% of coverage contigs, {round(pass_coverage/len(all_contigs)*100, 2)}% of all contigs)")
-    print(f"Contigs with acceptable length: {pass_length} ({round(pass_length/len(lengths_contigs)*100, 2)}% of coverage contigs, {round(pass_length/len(all_contigs)*100, 2)}% of all contigs)")
-    print(f"Acceptable contigs: {pass_contigs} ({round(pass_contigs/len(all_contigs)*100.0)}%)")
+    print(f"Contigs with acceptable length: {pass_length} ({round(pass_length/len(lengths_contigs)*100, 2)}% of length contigs, {round(pass_length/len(all_contigs)*100, 2)}% of all contigs)")
+    print(f"Acceptable contigs: {pass_contigs} ({round(pass_contigs/len(all_contigs)*100, 2)}%)")
 
     set_diffs = {
         "annotation_coverage": len(anno_contigs - coverage_contigs),
@@ -326,7 +326,7 @@ def build_data_summary(args, write_outfile=True):
     if write_outfile:
         with open(summary_file, "w") as summary:
             summary.write("\t".join(["contig id", "annotations", "length", "coverage"]) + "\n")
-            for contig in all_contigs:
+            for contig in sorted(all_contigs):
                 summary.write("{}\t{}\t{}\t{}\n".format(contig, annotation_summary.get(contig, ""), lengths.get(contig, ""), coverage.get(contig, "")))
 
     set_diffs["pass_coverage"] = pass_coverage
