@@ -319,6 +319,8 @@ def build_data_summary(args, write_outfile=True):
     set_diffs["pass_coverage"] = pass_coverage
     set_diffs["pass_length"] = pass_length
     set_diffs["total_contigs"] = len(all_contigs)
+    set_diffs["total_annotations"] = sum(annotation_summary.values())
+
     return set_diffs
 
 
