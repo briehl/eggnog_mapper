@@ -1,5 +1,7 @@
 import pandas as pd
 import os
+from typing import Dict
+from collections import defaultdict
 
 def load_annotations(input_annotation_file: str) -> pd.DataFrame:
     annotation_file_cols = [
@@ -27,6 +29,14 @@ def load_annotations(input_annotation_file: str) -> pd.DataFrame:
         "eggNOG_free_text_desc"
     ]
     return pd.read_csv(os.path.abspath(input_annotation_file), delimiter='\t', header=None, names=annotation_file_cols)
+
+def get_annotation_counts(input_annotation_file: str) -> Dict[str, int]:
+    counts = defaultdict(int)
+    with open(input_annotation_file) as anno_file:
+        for line in anno_file:
+            contig_id = query_to_contig_id(line.split()[0])
+            counts[contig_id] += 1
+    return counts
 
 def query_to_contig_id(query: str) -> str:
     """

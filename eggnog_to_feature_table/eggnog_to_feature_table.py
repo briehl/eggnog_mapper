@@ -25,7 +25,8 @@ from .contigs import (
 )
 from .annotations import (
     load_annotations,
-    query_to_contig_id
+    query_to_contig_id,
+    get_annotation_counts
 )
 from typing import List
 
@@ -263,14 +264,15 @@ def build_data_summary(args, write_outfile=True):
     else:
         summary_file = os.path.basename(fasta_file).split("_")[0] + "_contig_data_summary.tsv"
 
-    annotations = load_annotations(annotation_file)
+    annotation_summary = get_annotation_counts(annotation_file)
+    # annotations = load_annotations(annotation_file)
     coverage = load_contig_coverage(coverage_file)
     lengths = summarize_contig_lengths(fasta_file, None)
 
-    annotation_summary = defaultdict(int)
-    for _, row in annotations.iterrows():
-        contig_id = query_to_contig_id(row["query_name"])
-        annotation_summary[contig_id] += 1
+    # annotation_summary = defaultdict(int)
+    # for _, row in annotations.iterrows():
+    #     contig_id = query_to_contig_id(row["query_name"])
+    #     annotation_summary[contig_id] += 1
 
     print(f"Annotation file: {annotation_file}")
     print(f"FASTA file: {fasta_file}")
