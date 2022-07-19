@@ -320,6 +320,9 @@ def build_data_summary(args, write_outfile=True):
     set_diffs["pass_length"] = pass_length
     set_diffs["total_contigs"] = len(all_contigs)
     set_diffs["total_annotations"] = sum(annotation_summary.values())
+    set_diffs["fasta_contigs"] = len(lengths_contigs)
+    set_diffs["annotation_contigs"] = len(anno_contigs)
+    set_diffs["coverage_contigs"] = len(coverage_contigs)
 
     return set_diffs
 
